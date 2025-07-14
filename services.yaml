@@ -1,0 +1,67 @@
+check_gmail:
+  name: Check Gmail
+  description: Queries Gmail using filters and summarizes results with AI.
+  fields:
+    sender:
+      name: Sender
+      description: The sender email address to search for.
+      required: true
+      selector:
+        text:
+    label:
+      name: Label
+      description: Gmail label to search within (e.g., INBOX).
+      default: INBOX
+      selector:
+        text:
+    keyword:
+      name: Keyword
+      description: Keyword to search for in email content.
+      selector:
+        text:
+    custom_prompt:
+      name: Custom Prompt
+      description: AI prompt used to summarize the email.
+      selector:
+        text:
+    importance:
+      name: Importance
+      description: AI message importance setting.
+      default: auto
+      selector:
+        select:
+          options:
+            - "auto"
+            - "high"
+            - "low"
+    image_required:
+      name: Image Required
+      description: Whether an image is required for the notification.
+      default: "false"
+      selector:
+        select:
+          options:
+            - "true"
+            - "false"
+    age_limit:
+      name: Age Limit
+      description: Max age of emails to include (e.g., 2d, 4h).
+      default: 1d
+      selector:
+        text:
+    api_key:
+      name: API Key
+      description: OpenAI API Key used to call the model.
+      required: true
+      selector:
+        text:
+    model:
+      name: Model
+      description: OpenAI model to use.
+      default: gpt-4o-mini
+      selector:
+        select:
+          options:
+            - "gpt-4o-mini"
+            - "gpt-4o"
+            - "gpt-3.5-turbo"
