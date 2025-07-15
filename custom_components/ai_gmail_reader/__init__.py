@@ -1,0 +1,68 @@
+"""Home Assistant integration for reading Gmail with AI."""
+
+import logging
+import json
+from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.helpers.typing import ConfigType
+import voluptuous as vol
+
+from .gmail_reader import check_gmail
+
+_LOGGER = logging.getLogger(__name__)
+
+DOMAIN = "ai_gmail_reader"
+
+SERVICE_CHECK_GMAIL = "check_gmail"
+
+SERVICE_CHECK_GMAIL_SCHEMA = vol.Schema(
+    {
+        vol.Required("sender"): str,
+        vol.Optional("label", default="INBOX"): str,
+        vol.Optional("keyword", default=""): str,
+        vol.Optional("custom_prompt", default=""): str,
+        vol.Optional("importance", default="auto"): vol.In(["auto", "high", "low"]),
+        vol.Optional("image_required", default="false"): vol.In(["true", "false"]),
+        vol.Optional("age_limit", default="1d"): str,
+        vol.Required("api_key"): str,
+        vol.Optional("model", default="gpt-4o-mini"): str,
+        vol.Optional("response_variable"): str,
+    }
+)
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    async def handle_check_gmail(call: ServiceCall) -> None:
+        data = call.data
+        try:
+            result = await hass.async_add_executor_job(
+                check_gmail,
+                data["sender"],
+                data["label"],
+                data["keyword"],
+                data["custom_prompt"],
+                data["importance"],
+                data["image_required"],
+                data["age_limit"],
+                data["api_key"],
+                data["model"],
+            )
+            _LOGGER.info("Gmail check result: %s", result)
+            if resp_var := data.get("response_variable"):
+                await hass.services.async_call(
+                    "input_text",
+                    "set_value",
+                    {
+                        "entity_id": f"input_text.{resp_var}",
+                        "value": json.dumps(result),
+                    },
+                    blocking=False,
+                )
+        except Exception as err:  # pragma: no cover - runtime protection
+            _LOGGER.error("Unexpected error in Gmail reader: %s", err)
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_CHECK_GMAIL,
+        handle_check_gmail,
+        schema=SERVICE_CHECK_GMAIL_SCHEMA,
+    )
+    return True
