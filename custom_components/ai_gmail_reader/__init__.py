@@ -6,7 +6,7 @@ from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers.typing import ConfigType
 import voluptuous as vol
 
-from .gmail_reader import check_gmail
+from .gmail_reader import check_gmail, setup_auth
 from .sensor import GmailAIResponseSensor
 
 _LOGGER = logging.getLogger(__name__)
@@ -14,6 +14,7 @@ _LOGGER = logging.getLogger(__name__)
 DOMAIN = "ai_gmail_reader"
 
 SERVICE_CHECK_GMAIL = "check_gmail"
+SERVICE_SETUP_AUTH = "setup_auth"
 
 SERVICE_CHECK_GMAIL_SCHEMA = vol.Schema(
     {
@@ -30,14 +31,15 @@ SERVICE_CHECK_GMAIL_SCHEMA = vol.Schema(
     }
 )
 
+SERVICE_SETUP_AUTH_SCHEMA = vol.Schema({})
+
+
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the integration and register the Gmail check service."""
 
     # Ensure domain data storage
     hass.data.setdefault(DOMAIN, {})
     # The sensor entity is set up via the ai_gmail_reader sensor platform.
-
-
 
     async def handle_check_gmail(call: ServiceCall) -> None:
         data = call.data
@@ -79,5 +81,19 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         SERVICE_CHECK_GMAIL,
         handle_check_gmail,
         schema=SERVICE_CHECK_GMAIL_SCHEMA,
+    )
+
+    async def handle_setup_auth(call: ServiceCall) -> None:
+        try:
+            await hass.async_add_executor_job(setup_auth)
+            _LOGGER.info("Gmail OAuth setup completed")
+        except Exception as err:  # pragma: no cover - runtime protection
+            _LOGGER.error("OAuth setup failed: %s", err)
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SETUP_AUTH,
+        handle_setup_auth,
+        schema=SERVICE_SETUP_AUTH_SCHEMA,
     )
     return True
