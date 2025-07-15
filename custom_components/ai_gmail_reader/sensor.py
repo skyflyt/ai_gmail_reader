@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import logging
-from homeassistant.components.sensor import SensorEntity
+import voluptuous as vol
+from homeassistant.components.sensor import SensorEntity, PLATFORM_SCHEMA
 
 DOMAIN = "ai_gmail_reader"
 _LOGGER = logging.getLogger(__name__)
+
+PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({}, extra=vol.ALLOW_EXTRA)
 
 
 async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
