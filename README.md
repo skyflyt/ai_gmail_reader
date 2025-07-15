@@ -8,8 +8,9 @@ queries a Gmail account using OpenAI to summarize recent messages.
 Copy the `custom_components/ai_gmail_reader` folder to your Home Assistant
 `custom_components` directory and restart Home Assistant.
 
-Ensure your Gmail API credentials (`token.json` and `credentials.json`) are
-available under `/config/gmail/` on your Home Assistant instance.
+Place your Gmail API `credentials.json` under `/config/gmail/` on your Home
+Assistant instance. Run the `ai_gmail_reader.setup_auth` service once to store
+`token.json` under `/config/.ai_gmail_reader/`.
 
 ## Configuration
 
@@ -29,7 +30,7 @@ sensor:
 After reloading, you will be able to call `ai_gmail_reader.check_gmail` from the
 Services UI.
 
-The latest AI summary is stored in `sensor.gmail_ai_response` so it can be used
+The latest AI summary is stored in `sensor.ai_gmail_output` so it can be used
 in automations and dashboards. You may optionally specify `response_variable`
 to also write the raw JSON result to an `input_text` entity.
 
