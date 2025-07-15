@@ -29,7 +29,7 @@ Refer to `services.yaml` for all available fields. Example:
 ```yaml
 service: ai_gmail_reader.check_gmail
 data:
-  sender: spearce@bhwk.com
+  sender: email@domain.com
   label: INBOX
   keyword: pokemon
   custom_prompt: >
