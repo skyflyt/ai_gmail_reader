@@ -19,6 +19,13 @@ Add the integration in `configuration.yaml` to load the service:
 ai_gmail_reader:
 ```
 
+To expose the AI summary as a sensor, also include the sensor platform:
+
+```yaml
+sensor:
+  - platform: ai_gmail_reader
+```
+
 After reloading, you will be able to call `ai_gmail_reader.check_gmail` from the
 Services UI.
 

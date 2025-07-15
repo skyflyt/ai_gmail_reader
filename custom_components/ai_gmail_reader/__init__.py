@@ -35,11 +35,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     # Ensure domain data storage
     hass.data.setdefault(DOMAIN, {})
+    # The sensor entity is set up via the ai_gmail_reader sensor platform.
 
-    # Load the sensor platform to expose the response in Home Assistant
-    hass.async_create_task(
-        hass.helpers.discovery.async_load_platform("sensor", DOMAIN, {}, config)
-    )
+
 
     async def handle_check_gmail(call: ServiceCall) -> None:
         data = call.data
