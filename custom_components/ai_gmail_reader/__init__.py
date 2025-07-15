@@ -43,19 +43,20 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     async def handle_check_gmail(call: ServiceCall) -> None:
         data = call.data
+        args = [
+            data["sender"],
+            data["label"],
+            data["keyword"],
+            data["custom_prompt"],
+            data["importance"],
+            data["image_required"],
+            data["age_limit"],
+            data["api_key"],
+            data["model"],
+        ]
+        _LOGGER.warning("ai_gmail_reader args: %s", args)
         try:
-            result = await hass.async_add_executor_job(
-                check_gmail,
-                data["sender"],
-                data["label"],
-                data["keyword"],
-                data["custom_prompt"],
-                data["importance"],
-                data["image_required"],
-                data["age_limit"],
-                data["api_key"],
-                data["model"],
-            )
+            result = await hass.async_add_executor_job(check_gmail, *args)
             _LOGGER.info("Gmail check result: %s", result)
 
             # Update sensor with latest response if available
@@ -74,7 +75,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                     blocking=False,
                 )
         except Exception as err:  # pragma: no cover - runtime protection
-            _LOGGER.error("Unexpected error in Gmail reader: %s", err)
+            _LOGGER.exception("Unexpected error in Gmail reader: %s", err)
 
     hass.services.async_register(
         DOMAIN,
@@ -88,7 +89,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             await hass.async_add_executor_job(setup_auth)
             _LOGGER.info("Gmail OAuth setup completed")
         except Exception as err:  # pragma: no cover - runtime protection
-            _LOGGER.error("OAuth setup failed: %s", err)
+            _LOGGER.exception("OAuth setup failed: %s", err)
 
     hass.services.async_register(
         DOMAIN,
