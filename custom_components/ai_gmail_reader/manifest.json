@@ -1,7 +1,7 @@
 {
   "domain": "ai_gmail_reader",
   "name": "AI Gmail Reader",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "documentation": "https://github.com/skyflyt/ai_gmail_reader",
   "requirements": [
     "openai",
@@ -11,5 +11,6 @@
   ],
   "codeowners": ["@yourgithubhandle"],
   "dependencies": [],
-  "iot_class": "cloud_polling"
+  "iot_class": "cloud_polling",
+  "platforms": ["sensor"]
 }
