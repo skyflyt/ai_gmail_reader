@@ -1,6 +1,7 @@
 import base64
 import os
 import re
+import logging
 from datetime import datetime, timedelta
 from email.utils import parsedate_to_datetime
 
@@ -8,6 +9,8 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from openai import OpenAI
+
+_LOGGER = logging.getLogger(__name__)
 
 TOKEN_DIR = "/config/.ai_gmail_reader"
 TOKEN_PATH = os.path.join(TOKEN_DIR, "token.json")
@@ -42,6 +45,7 @@ def check_gmail(
     client = OpenAI(api_key=api_key)
 
     # Setup Gmail API
+    _LOGGER.debug("Using token file at %s", TOKEN_PATH)
     creds = Credentials.from_authorized_user_file(TOKEN_PATH)
     service = build("gmail", "v1", credentials=creds)
 
@@ -50,24 +54,35 @@ def check_gmail(
     if keyword:
         q += f" {keyword}"
 
-    messages = (
-        service.users()
-        .messages()
-        .list(userId="me", q=q, maxResults=MAX_RESULTS)
-        .execute()
-        .get("messages", [])
-    )
+    _LOGGER.debug("Gmail query: %s", q)
+
+    try:
+        messages = (
+            service.users()
+            .messages()
+            .list(userId="me", q=q, maxResults=MAX_RESULTS)
+            .execute()
+            .get("messages", [])
+        )
+    except Exception as err:  # pragma: no cover - runtime protection
+        _LOGGER.exception("Failed to fetch messages: %s", err)
+        return {"status": "error", "error": str(err)}
 
     if not messages:
+        _LOGGER.debug("No messages found for query")
         return {"status": "no_unread"}
 
     for msg_meta in messages:
-        msg = (
-            service.users()
-            .messages()
-            .get(userId="me", id=msg_meta["id"], format="full")
-            .execute()
-        )
+        try:
+            msg = (
+                service.users()
+                .messages()
+                .get(userId="me", id=msg_meta["id"], format="full")
+                .execute()
+            )
+        except Exception as err:  # pragma: no cover - runtime protection
+            _LOGGER.exception("Failed to fetch message %s: %s", msg_meta.get("id"), err)
+            continue
 
         headers = {h["name"]: h["value"] for h in msg["payload"]["headers"]}
         date = parsedate_to_datetime(headers.get("Date", ""))
@@ -96,18 +111,23 @@ def check_gmail(
             {custom_prompt.strip()}
         """
 
-        ai_response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are an email summarizer for a Gmail inbox.",
-                },
-                {"role": "user", "content": full_prompt.strip()},
-            ],
-        )
+        try:
+            ai_response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are an email summarizer for a Gmail inbox.",
+                    },
+                    {"role": "user", "content": full_prompt.strip()},
+                ],
+            )
+        except Exception as err:  # pragma: no cover - runtime protection
+            _LOGGER.exception("OpenAI request failed: %s", err)
+            return {"status": "error", "error": str(err)}
 
         summary = ai_response.choices[0].message.content
+        _LOGGER.debug("Summarized email '%s' -> %s", subject, summary)
 
         # Extract image and link
         link_match = re.search(r"https?://\S+", html)
@@ -125,6 +145,9 @@ def check_gmail(
             "preorder": "preorder" in clean_text.lower(),
         }
 
+        _LOGGER.debug("Result built: %s", result)
+
         return result
 
+    _LOGGER.debug("No valid response generated")
     return {"status": "no_valid_response"}
