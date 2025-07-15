@@ -7,6 +7,7 @@ from homeassistant.helpers.typing import ConfigType
 import voluptuous as vol
 
 from .gmail_reader import check_gmail
+from .sensor import GmailAIResponseSensor
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -30,6 +31,16 @@ SERVICE_CHECK_GMAIL_SCHEMA = vol.Schema(
 )
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Set up the integration and register the Gmail check service."""
+
+    # Ensure domain data storage
+    hass.data.setdefault(DOMAIN, {})
+
+    # Load the sensor platform to expose the response in Home Assistant
+    hass.async_create_task(
+        hass.helpers.discovery.async_load_platform("sensor", DOMAIN, {}, config)
+    )
+
     async def handle_check_gmail(call: ServiceCall) -> None:
         data = call.data
         try:
@@ -46,6 +57,12 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                 data["model"],
             )
             _LOGGER.info("Gmail check result: %s", result)
+
+            # Update sensor with latest response if available
+            sensor: GmailAIResponseSensor | None = hass.data[DOMAIN].get("sensor")
+            if sensor is not None:
+                await sensor.async_update_from_result(result)
+
             if resp_var := data.get("response_variable"):
                 await hass.services.async_call(
                     "input_text",

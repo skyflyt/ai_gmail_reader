@@ -22,6 +22,10 @@ ai_gmail_reader:
 After reloading, you will be able to call `ai_gmail_reader.check_gmail` from the
 Services UI.
 
+The latest AI summary is stored in `sensor.gmail_ai_response` so it can be used
+in automations and dashboards. You may optionally specify `response_variable`
+to also write the raw JSON result to an `input_text` entity.
+
 ## Service Data
 
 Refer to `services.yaml` for all available fields. Example:
