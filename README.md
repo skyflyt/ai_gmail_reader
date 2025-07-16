@@ -34,6 +34,19 @@ The latest AI summary is stored in `sensor.ai_gmail_output` so it can be used
 in automations and dashboards. You may optionally specify `response_variable`
 to also write the raw JSON result to an `input_text` entity.
 
+If you want a ready-made place to store this JSON output, create an
+`input_text` helper in `configuration.yaml`:
+
+```yaml
+input_text:
+  ai_gmail_result:
+    name: AI Gmail Output
+    max: 1024
+```
+
+Then call the service with `response_variable: ai_gmail_result` to keep the
+latest result available for automations.
+
 ## Service Data
 
 Refer to `services.yaml` for all available fields. Example:
