@@ -50,7 +50,7 @@ def check_gmail(
     service = build("gmail", "v1", credentials=creds)
 
     # Build search query
-    q = f"label:{label} from:{sender} newer_than:{age_limit}"
+    q = f"label:{label} is:unread from:{sender} newer_than:{age_limit}"
     if keyword:
         q += f" {keyword}"
 
@@ -60,10 +60,16 @@ def check_gmail(
         messages = (
             service.users()
             .messages()
-            .list(userId="me", q=q, maxResults=MAX_RESULTS)
+            .list(
+                userId="me",
+                q=q,
+                labelIds=[label, "UNREAD"],
+                maxResults=MAX_RESULTS,
+            )
             .execute()
             .get("messages", [])
         )
+        _LOGGER.debug("Found %d messages", len(messages))
     except Exception as err:  # pragma: no cover - runtime protection
         _LOGGER.exception("Failed to fetch messages: %s", err)
         return {"status": "error", "error": str(err)}

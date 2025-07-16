@@ -1,7 +1,8 @@
 # AI Gmail Reader
 
 This custom integration exposes a service `ai_gmail_reader.check_gmail` which
-queries a Gmail account using OpenAI to summarize recent messages.
+queries a Gmail account using OpenAI to summarize recent messages. Only unread
+messages matching the query are considered.
 
 ## Installation
 
