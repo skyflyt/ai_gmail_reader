@@ -8,6 +8,11 @@ queries a Gmail account using OpenAI to summarize recent messages.
 Copy the `custom_components/ai_gmail_reader` folder to your Home Assistant
 `custom_components` directory and restart Home Assistant.
 
+The integration relies on the `openai` Python package. Home Assistant will
+automatically install the dependency, but you must be running version 1.9.0 or
+newer. If your environment uses an older `openai` package you may see import
+errors. Updating it to the latest release resolves these issues.
+
 Place your Gmail API `credentials.json` under `/config/gmail/` on your Home
 Assistant instance. Run the `ai_gmail_reader.setup_auth` service once to store
 `token.json` under `/config/.ai_gmail_reader/`.
