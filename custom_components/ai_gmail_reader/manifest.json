@@ -1,7 +1,7 @@
 {
   "domain": "ai_gmail_reader",
   "name": "AI Gmail Reader",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "documentation": "https://github.com/skyflyt/ai_gmail_reader",
   "requirements": [
     "openai>=1.9.0",
