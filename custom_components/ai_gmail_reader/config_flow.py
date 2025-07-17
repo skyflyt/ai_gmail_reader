@@ -2,18 +2,10 @@
 
 from __future__ import annotations
 
-import voluptuous as vol
 from homeassistant import config_entries
+from .const import DOMAIN, CONF_SENDER, CONF_LABEL, CONF_API_KEY, CONF_MODEL, CONF_KEYWORD
+import voluptuous as vol
 from homeassistant.helpers import config_validation as cv
-
-from .const import (
-    DOMAIN,
-    CONF_SENDER,
-    CONF_LABEL,
-    CONF_API_KEY,
-    CONF_MODEL,
-    CONF_KEYWORD,
-)
 
 
 DATA_SCHEMA = vol.Schema(
@@ -22,13 +14,14 @@ DATA_SCHEMA = vol.Schema(
         vol.Required(CONF_LABEL, default="INBOX"): str,
         vol.Required(CONF_API_KEY): str,
         vol.Required(CONF_MODEL, default="gpt-4o-mini"): str,
-        vol.Required(CONF_KEYWORD, default=""): cv.string,
+        vol.Optional(CONF_KEYWORD, default=""): cv.string,
         vol.Optional("custom_prompt", default=""): cv.string,
     }
 )
 
 
-class GmailReaderFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
+@config_entries.HANDLERS.register(DOMAIN)
+class GmailReaderFlowHandler(config_entries.ConfigFlow):
     """Handle a config flow for AI Gmail Reader."""
 
     VERSION = 1
