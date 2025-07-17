@@ -65,7 +65,10 @@ def check_gmail(
     service = build("gmail", "v1", credentials=creds)
 
     # Build search query using the label provided and unread filter
-    q = f"in:{label} is:unread from:{sender} newer_than:{age_limit}"
+    label_term = (
+        f'label:"{label}"' if " " in label else f"label:{label}"
+    )
+    q = f"{label_term} is:unread from:{sender} newer_than:{age_limit}"
     if keyword:
         q += f" {keyword}"
     _LOGGER.debug("Gmail query: %s", q)
