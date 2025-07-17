@@ -20,25 +20,9 @@ Assistant instance. Run the `ai_gmail_reader.setup_auth` service once to store
 
 ## Configuration
 
-Add the integration in `configuration.yaml` to load the service:
+After copying the files and restarting Home Assistant, go to **Settings → Integrations** and click **Add Integration**. Choose **AI Gmail Reader** and fill in the form with the sender, label, OpenAI API key and model. A sensor will be created automatically and will poll Gmail every minute.
 
-```yaml
-ai_gmail_reader:
-```
-
-To expose the AI summary as a sensor, also include the sensor platform:
-
-```yaml
-sensor:
-  - platform: ai_gmail_reader
-```
-
-After reloading, you will be able to call `ai_gmail_reader.check_gmail` from the
-Services UI.
-
-The latest AI summary is stored in `sensor.ai_gmail_output` so it can be used
-in automations and dashboards. You may optionally specify `response_variable`
-to also write the raw JSON result to an `input_text` entity.
+The latest AI summary is available in `sensor.ai_gmail_reader` and its JSON data is exposed as attributes so it can be used directly in automations and dashboards. You may optionally set a `response_variable` when calling the service to store the raw JSON in an `input_text` helper.
 
 If you want a ready-made place to store this JSON output, create an
 `input_text` helper in `configuration.yaml`:
