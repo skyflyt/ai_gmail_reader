@@ -23,6 +23,7 @@ DATA_SCHEMA = vol.Schema(
         vol.Required(CONF_API_KEY): str,
         vol.Required(CONF_MODEL, default="gpt-4o-mini"): str,
         vol.Required(CONF_KEYWORD, default=""): cv.string,
+        vol.Optional("custom_prompt", default=""): cv.string,
     }
 )
 
