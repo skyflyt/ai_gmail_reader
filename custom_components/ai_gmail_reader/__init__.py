@@ -108,12 +108,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
 
-    await hass.config_entries.async_forward_entry_setup(entry, "sensor")
+    # forward to sensor (new plural API)
+    await hass.config_entries.async_forward_entry_setups(entry, ["sensor"])
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    await hass.config_entries.async_forward_entry_unload(entry, "sensor")
+    # unload the sensor platform
+    await hass.config_entries.async_forward_entry_unloads(entry, ["sensor"])
     hass.data[DOMAIN].pop(entry.entry_id)
     return True
