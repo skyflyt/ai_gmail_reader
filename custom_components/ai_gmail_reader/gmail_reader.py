@@ -19,7 +19,7 @@ SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
 # Default context instructions sent to the AI model when building prompts.
 DEFAULT_PROMPT_CONTEXT = (
     "Return a JSON object with keys 'summary', 'link' and 'image'. "
-    "The summary field must be no longer than 140 characters."
+    "Keep the summary under 140 characters."
 )
 
 
@@ -58,6 +58,7 @@ def check_gmail(
 ):
     MAX_RESULTS = 5
     client = OpenAI(api_key=api_key)
+    profile = keyword.lower().replace(" ", "_") or "default"
 
     # Setup Gmail API
     _LOGGER.debug("Using token file at %s", TOKEN_PATH)
@@ -149,7 +150,7 @@ def check_gmail(
             return {"status": "no_valid_response"}
         summary = ai_json.get("summary", "").strip()
         if len(summary) > 140:
-            summary = summary[:137].rstrip() + "..."
+            summary = summary[:137].rstrip() + "…"
         _LOGGER.debug("Summarized email '%s' -> %s", subject, summary)
 
         # mark message as read
@@ -164,12 +165,12 @@ def check_gmail(
 
         # Extract image and link from HTML (not the cleaned text)
         link_match = re.search(r"https?://\S+", html)
-        raw_images = re.findall(r'<img[^>]+src=["\'](https?://[^"\']+)["\']', html)
+        imgs = re.findall(r'<img[^>]+src=["\'](https?://[^"\']+)["\']', html)
         real_imgs = [
-            u for u in raw_images if "s0-d-e1-ft" not in u and "googleusercontent.com/" not in u
+            u for u in imgs if "s0-d-e1-ft" not in u and "googleusercontent.com/" not in u
         ]
-        fallback = real_imgs[0] if real_imgs else None
-        image = ai_json.get("image") or fallback
+        image = ai_json.get("image")
+        image = image or (real_imgs[0] if real_imgs else None)
 
         result = {
             "status": "ok",
@@ -178,7 +179,7 @@ def check_gmail(
             "thread_id": thread_id,
             "link": ai_json.get("link") or (link_match.group(0) if link_match else ""),
             "image": image or "",
-            "channel": keyword or "default",
+            "channel": profile,
             "importance": importance,
             "preorder": "preorder" in clean_text.lower(),
         }
