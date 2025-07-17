@@ -6,7 +6,7 @@ import logging
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
-import openai
+from openai import OpenAI
 import json
 
 _LOGGER = logging.getLogger(__name__)
@@ -27,7 +27,7 @@ def build_prompt(email_text: str, custom_prompt: str) -> str:
     """Return the full prompt for the AI model."""
     preamble = (
         "You are an email summarizer for a Gmail inbox. "
-        "The summary field must be no longer than 140 characters."
+        "Keep the summary under 140 characters."
     )
     return (
         f"{preamble}\n{DEFAULT_PROMPT_CONTEXT}\n{custom_prompt.strip()}\nEMAIL:\n{email_text}"
@@ -57,7 +57,7 @@ def check_gmail(
     model,
 ):
     MAX_RESULTS = 5
-    openai.api_key = api_key
+    client = OpenAI(api_key=api_key)
 
     # Setup Gmail API
     _LOGGER.debug("Using token file at %s", TOKEN_PATH)
@@ -125,7 +125,7 @@ def check_gmail(
         full_prompt = build_prompt(clean_text, custom_prompt)
 
         try:
-            ai_response = openai.chat.completions.create(
+            ai_response = client.chat.completions.create(
                 model=model,
                 messages=[
                     {
@@ -141,12 +141,15 @@ def check_gmail(
 
         try:
             ai_json = json.loads(ai_response.choices[0].message.content)
-        except json.JSONDecodeError as err:
-            _LOGGER.exception("Failed to decode AI response: %s", err)
-            continue
-        summary = ai_json.get("summary", "")
+        except json.JSONDecodeError:
+            _LOGGER.debug(
+                "Malformed AI response: %s",
+                ai_response.choices[0].message.content,
+            )
+            return {"status": "no_valid_response"}
+        summary = ai_json.get("summary", "").strip()
         if len(summary) > 140:
-            summary = summary[:137] + "..."
+            summary = summary[:137].rstrip() + "..."
         _LOGGER.debug("Summarized email '%s' -> %s", subject, summary)
 
         # mark message as read
@@ -162,6 +165,7 @@ def check_gmail(
         # Extract image and link from HTML (not the cleaned text)
         link_match = re.search(r"https?://\S+", html)
         image_match = re.search(r'<img[^>]+src=["\'](https?://[^"\']+)["\']', html)
+        image = ai_json.get("image") or (image_match.group(1) if image_match else None)
 
         result = {
             "status": "ok",
@@ -169,8 +173,8 @@ def check_gmail(
             "message": summary,
             "thread_id": thread_id,
             "link": ai_json.get("link") or (link_match.group(0) if link_match else ""),
-            "image": ai_json.get("image") or (image_match.group(1) if image_match else ""),
-            "channel": keyword,
+            "image": image or "",
+            "channel": keyword or "default",
             "importance": importance,
             "preorder": "preorder" in clean_text.lower(),
         }
