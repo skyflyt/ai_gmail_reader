@@ -1,17 +1,20 @@
 """Home Assistant integration for reading Gmail with AI."""
 
-import logging
+from __future__ import annotations
+
 import json
+import logging
+
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers.typing import ConfigType
 import voluptuous as vol
 
+from .const import DOMAIN
 from .gmail_reader import check_gmail, setup_auth
-from .sensor import GmailAIResponseSensor
+from .coordinator import GmailDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
-
-DOMAIN = "ai_gmail_reader"
 
 SERVICE_CHECK_GMAIL = "check_gmail"
 SERVICE_SETUP_AUTH = "setup_auth"
@@ -35,11 +38,8 @@ SERVICE_SETUP_AUTH_SCHEMA = vol.Schema({})
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Set up the integration and register the Gmail check service."""
-
-    # Ensure domain data storage
+    """Set up the integration and register services."""
     hass.data.setdefault(DOMAIN, {})
-    # The sensor entity is set up via the ai_gmail_reader sensor platform.
 
     async def handle_check_gmail(call: ServiceCall) -> None:
         data = call.data
@@ -54,15 +54,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             data["api_key"],
             data["model"],
         ]
-        _LOGGER.warning("ai_gmail_reader args: %s", args)
         try:
             result = await hass.async_add_executor_job(check_gmail, *args)
             _LOGGER.info("Gmail check result: %s", result)
-
-            # Update sensor with latest response if available
-            sensor: GmailAIResponseSensor | None = hass.data[DOMAIN].get("sensor")
-            if sensor is not None:
-                await sensor.async_update_from_result(result)
 
             if resp_var := data.get("response_variable"):
                 await hass.services.async_call(
@@ -97,4 +91,29 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         handle_setup_auth,
         schema=SERVICE_SETUP_AUTH_SCHEMA,
     )
+    return True
+
+
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Set up AI Gmail Reader from a config entry."""
+    sender = entry.data["sender"]
+    label = entry.data["label"]
+    api_key = entry.data["api_key"]
+    model = entry.data["model"]
+
+    coordinator = GmailDataUpdateCoordinator(
+        hass, sender=sender, label=label, api_key=api_key, model=model
+    )
+    await coordinator.async_config_entry_first_refresh()
+
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
+
+    await hass.config_entries.async_forward_entry_setup(entry, "sensor")
+    return True
+
+
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Unload a config entry."""
+    await hass.config_entries.async_forward_entry_unload(entry, "sensor")
+    hass.data[DOMAIN].pop(entry.entry_id)
     return True
