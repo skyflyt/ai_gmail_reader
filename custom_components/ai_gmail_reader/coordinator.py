@@ -15,7 +15,7 @@ _LOGGER = logging.getLogger(__name__)
 class GmailDataUpdateCoordinator(DataUpdateCoordinator):
     """Poll Gmail/AI periodically and store the latest JSON."""
 
-    def __init__(self, hass, sender, label, api_key, model):
+    def __init__(self, hass, sender, label, api_key, model, keyword="", custom_prompt=""):
         super().__init__(
             hass,
             _LOGGER,
@@ -26,6 +26,8 @@ class GmailDataUpdateCoordinator(DataUpdateCoordinator):
         self._label = label
         self._api_key = api_key
         self._model = model
+        self._keyword = keyword
+        self._custom_prompt = custom_prompt
 
     async def _async_update_data(self):
         """Fetch data from Gmail + OpenAI in the executor."""
@@ -34,8 +36,8 @@ class GmailDataUpdateCoordinator(DataUpdateCoordinator):
                 check_gmail,
                 self._sender,
                 self._label,
-                "",
-                "",
+                self._keyword,
+                self._custom_prompt,
                 "auto",
                 False,
                 "1d",
