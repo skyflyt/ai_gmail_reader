@@ -13,25 +13,20 @@ _LOGGER = logging.getLogger(__name__)
 
 TOKEN_DIR = "/config/.ai_gmail_reader"
 TOKEN_PATH = os.path.join(TOKEN_DIR, "token.json")
+OUTPUT_DIR = os.path.join(TOKEN_DIR, "output")
 CREDS_PATH = "/config/gmail/credentials.json"
 SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
 
-# Default context instructions sent to the AI model when building prompts.
-DEFAULT_PROMPT_CONTEXT = (
-    "Return a JSON object with keys 'summary', 'link' and 'image'. "
-    "Keep the summary under 140 characters."
+# Base prompt sent to the AI model when building prompts.
+BASE_PROMPT = (
+    "You are an AI agent that extracts summary, link, and image from marketing emails. "
+    "Return JSON and keep 'summary' <= 140 chars."
 )
 
 
 def build_prompt(email_text: str, custom_prompt: str) -> str:
     """Return the full prompt for the AI model."""
-    preamble = (
-        "You are an email summarizer for a Gmail inbox. "
-        "Keep the summary under 140 characters."
-    )
-    return (
-        f"{preamble}\n{DEFAULT_PROMPT_CONTEXT}\n{custom_prompt.strip()}\nEMAIL:\n{email_text}"
-    )
+    return f"{BASE_PROMPT}\n{custom_prompt.strip()}\nEMAIL:\n{email_text}"
 
 
 def setup_auth() -> str:
@@ -186,7 +181,34 @@ def check_gmail(
 
         _LOGGER.debug("Result built: %s", result)
 
+        try:
+            os.makedirs(OUTPUT_DIR, exist_ok=True)
+            sender_id = re.sub(r"[^A-Za-z0-9]+", "_", sender)
+            out_path = os.path.join(OUTPUT_DIR, f"last_{sender_id}_output.json")
+            with open(out_path, "w") as out_file:
+                json.dump(result, out_file)
+        except Exception as err:
+            _LOGGER.warning("Failed to cache output: %s", err)
+
         return result
 
     _LOGGER.debug("No valid response generated")
     return {"status": "no_valid_response"}
+
+
+def main() -> None:
+    """Entry point for manual execution."""
+    import argparse
+
+    parser = argparse.ArgumentParser(description="AI Gmail Reader utility")
+    parser.add_argument("--auth", action="store_true", help="Run OAuth setup")
+    args = parser.parse_args()
+
+    if args.auth:
+        setup_auth()
+    else:
+        parser.print_help()
+
+
+if __name__ == "__main__":
+    main()
