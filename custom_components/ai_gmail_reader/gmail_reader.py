@@ -14,7 +14,7 @@ _LOGGER = logging.getLogger(__name__)
 TOKEN_DIR = "/config/.ai_gmail_reader"
 TOKEN_PATH = os.path.join(TOKEN_DIR, "token.json")
 CREDS_PATH = "/config/gmail/credentials.json"
-SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
+SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
 
 # Default context instructions sent to the AI model when building prompts.
 DEFAULT_PROMPT_CONTEXT = (
@@ -65,7 +65,7 @@ def check_gmail(
         _LOGGER.error("Gmail token.json not found at %s", TOKEN_PATH)
         return {"status": "error", "error": "no_token"}
 
-    creds = Credentials.from_authorized_user_file(TOKEN_PATH)
+    creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
     service = build("gmail", "v1", credentials=creds)
 
     # Build search query using Gmail's "in:" operator
@@ -164,8 +164,12 @@ def check_gmail(
 
         # Extract image and link from HTML (not the cleaned text)
         link_match = re.search(r"https?://\S+", html)
-        image_match = re.search(r'<img[^>]+src=["\'](https?://[^"\']+)["\']', html)
-        image = ai_json.get("image") or (image_match.group(1) if image_match else None)
+        raw_images = re.findall(r'<img[^>]+src=["\'](https?://[^"\']+)["\']', html)
+        real_imgs = [
+            u for u in raw_images if "s0-d-e1-ft" not in u and "googleusercontent.com/" not in u
+        ]
+        fallback = real_imgs[0] if real_imgs else None
+        image = ai_json.get("image") or fallback
 
         result = {
             "status": "ok",
