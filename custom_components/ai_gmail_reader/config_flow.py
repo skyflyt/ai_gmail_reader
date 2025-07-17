@@ -4,8 +4,16 @@ from __future__ import annotations
 
 import voluptuous as vol
 from homeassistant import config_entries
+from homeassistant.helpers import config_validation as cv
 
-from .const import DOMAIN, CONF_SENDER, CONF_LABEL, CONF_API_KEY, CONF_MODEL
+from .const import (
+    DOMAIN,
+    CONF_SENDER,
+    CONF_LABEL,
+    CONF_API_KEY,
+    CONF_MODEL,
+    CONF_KEYWORD,
+)
 
 
 DATA_SCHEMA = vol.Schema(
@@ -14,6 +22,7 @@ DATA_SCHEMA = vol.Schema(
         vol.Required(CONF_LABEL, default="INBOX"): str,
         vol.Required(CONF_API_KEY): str,
         vol.Required(CONF_MODEL, default="gpt-4o-mini"): str,
+        vol.Required(CONF_KEYWORD, default=""): cv.string,
     }
 )
 

@@ -125,7 +125,7 @@ def check_gmail(
         full_prompt = build_prompt(clean_text, custom_prompt)
 
         try:
-            ai_response = openai.ChatCompletion.create(
+            ai_response = openai.chat.completions.create(
                 model=model,
                 messages=[
                     {
