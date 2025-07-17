@@ -46,32 +46,31 @@ def check_gmail(
 
     # Setup Gmail API
     _LOGGER.debug("Using token file at %s", TOKEN_PATH)
+    if not os.path.isfile(TOKEN_PATH):
+        _LOGGER.error("Gmail token.json not found at %s", TOKEN_PATH)
+        return {"status": "error", "error": "no_token"}
+
     creds = Credentials.from_authorized_user_file(TOKEN_PATH)
     service = build("gmail", "v1", credentials=creds)
 
-    # Build search query
-    q = f"label:{label} is:unread from:{sender} newer_than:{age_limit}"
+    # Build search query using Gmail's "in:" operator
+    q = f"in:inbox is:unread from:{sender} newer_than:{age_limit}"
     if keyword:
         q += f" {keyword}"
-
     _LOGGER.debug("Gmail query: %s", q)
 
     try:
-        messages = (
+        response = (
             service.users()
             .messages()
-            .list(
-                userId="me",
-                q=q,
-                labelIds=[label, "UNREAD"],
-                maxResults=MAX_RESULTS,
-            )
+            .list(userId="me", q=q, maxResults=MAX_RESULTS)
             .execute()
-            .get("messages", [])
         )
+        messages = response.get("messages", [])
+        _LOGGER.debug("Raw Gmail list response: %s", response)
         _LOGGER.debug("Found %d messages", len(messages))
     except Exception as err:  # pragma: no cover - runtime protection
-        _LOGGER.exception("Failed to fetch messages: %s", err)
+        _LOGGER.exception("Gmail API list() failed")
         return {"status": "error", "error": str(err)}
 
     if not messages:
