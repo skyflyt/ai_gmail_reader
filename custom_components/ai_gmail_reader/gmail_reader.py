@@ -69,8 +69,8 @@ def check_gmail(
     creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
     service = build("gmail", "v1", credentials=creds)
 
-    # Build search query using Gmail's "in:" operator
-    q = f"in:inbox is:unread from:{sender} newer_than:{age_limit}"
+    # Build search query using the label provided and unread filter
+    q = f"in:{label} is:unread from:{sender} newer_than:{age_limit}"
     if keyword:
         q += f" {keyword}"
     _LOGGER.debug("Gmail query: %s", q)
