@@ -6,7 +6,7 @@ import logging
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
-from openai import OpenAI
+import openai
 import json
 
 _LOGGER = logging.getLogger(__name__)
@@ -57,8 +57,7 @@ def check_gmail(
     model,
 ):
     MAX_RESULTS = 5
-
-    client = OpenAI(api_key=api_key)
+    openai.api_key = api_key
 
     # Setup Gmail API
     _LOGGER.debug("Using token file at %s", TOKEN_PATH)
@@ -126,7 +125,7 @@ def check_gmail(
         full_prompt = build_prompt(clean_text, custom_prompt)
 
         try:
-            ai_response = client.chat.completions.create(
+            ai_response = openai.ChatCompletion.create(
                 model=model,
                 messages=[
                     {
