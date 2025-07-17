@@ -102,7 +102,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     model = entry.data["model"]
 
     coordinator = GmailDataUpdateCoordinator(
-        hass, sender=sender, label=label, api_key=api_key, model=model
+        hass,
+        sender=sender,
+        label=label,
+        api_key=api_key,
+        model=model,
+        keyword=entry.data.get("keyword", ""),
+        custom_prompt=entry.data.get("custom_prompt", ""),
     )
     await coordinator.async_config_entry_first_refresh()
 
