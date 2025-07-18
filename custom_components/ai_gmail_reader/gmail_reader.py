@@ -64,10 +64,12 @@ def check_gmail(
     creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
     service = build("gmail", "v1", credentials=creds)
 
-    # Build search query using the label provided and unread filter
-    label_term = (
-        f'label:"{label}"' if " " in label else f"label:{label}"
-    )
+    # Build search query. Use the Gmail "in:" operator for the inbox to
+    # avoid label case-sensitivity issues. Otherwise search by label.
+    if label.lower() == "inbox":
+        label_term = "in:inbox"
+    else:
+        label_term = f'label:"{label}"' if " " in label else f"label:{label}"
     q = f"{label_term} is:unread from:{sender} newer_than:{age_limit}"
     if keyword:
         q += f" {keyword}"
@@ -147,8 +149,7 @@ def check_gmail(
                 "Malformed AI response: %s",
                 ai_response.choices[0].message.content,
             )
-            results.append({"status": "no_valid_response"})
-            continue
+            ai_json = {"summary": ai_response.choices[0].message.content.strip()}
 
         summary = ai_json.get("summary", "").strip()
         if len(summary) > 140:
