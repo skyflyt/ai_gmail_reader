@@ -53,16 +53,9 @@ def check_gmail(sender, label, keyword, custom_prompt, importance, image_require
         return {"status": "error", "error": "no_token"}
 
     creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
-    _LOGGER.debug("Building Gmail service without proxies")
     service = build("gmail", "v1", credentials=creds)
-    _LOGGER.debug("Gmail service built: %s", service)
 
-    # Build search query. Use the Gmail "in:" operator for the inbox to
-    # avoid label case-sensitivity issues. Otherwise search by label.
-    if label.lower() == "inbox":
-        label_term = "in:inbox"
-    else:
-        label_term = f'label:"{label}"' if " " in label else f"label:{label}"
+    label_term = "in:inbox" if label.lower() == "inbox" else f'label:"{label}"' if " " in label else f"label:{label}"
     q = f"{label_term} is:unread from:{sender} newer_than:{age_limit}"
     if keyword:
         q += f" {keyword}"
@@ -75,7 +68,6 @@ def check_gmail(sender, label, keyword, custom_prompt, importance, image_require
         return {"status": "error", "error": str(err)}
 
     if not messages:
-        _LOGGER.debug("No messages found for query")
         return []
 
     results = []
@@ -112,14 +104,17 @@ def check_gmail(sender, label, keyword, custom_prompt, importance, image_require
             results.append({"status": "error", "error": str(err)})
             continue
 
+        raw_response = ai_response.choices[0].message.content.strip()
+        if raw_response.startswith("```json"):
+            raw_response = raw_response[7:]
+        if raw_response.endswith("```"):
+            raw_response = raw_response[:-3]
+
         try:
-            ai_json = json.loads(ai_response.choices[0].message.content)
+            ai_json = json.loads(raw_response)
         except json.JSONDecodeError:
-            _LOGGER.debug(
-                "Malformed AI response: %s",
-                ai_response.choices[0].message.content,
-            )
-            ai_json = {"summary": ai_response.choices[0].message.content.strip()}
+            _LOGGER.warning("Failed to parse AI JSON: %s", raw_response)
+            ai_json = {"summary": raw_response}
 
         summary = ai_json.get("summary", "").strip()
         if len(summary) > 140:
@@ -159,7 +154,6 @@ def check_gmail(sender, label, keyword, custom_prompt, importance, image_require
         results.append(result)
 
     return results
-
 
 def main() -> None:
     import argparse
