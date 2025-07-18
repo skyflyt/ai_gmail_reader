@@ -62,7 +62,9 @@ def check_gmail(
         return {"status": "error", "error": "no_token"}
 
     creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
+    _LOGGER.debug("Building Gmail service without proxies")
     service = build("gmail", "v1", credentials=creds)
+    _LOGGER.debug("Gmail service built: %s", service)
 
     # Build search query. Use the Gmail "in:" operator for the inbox to
     # avoid label case-sensitivity issues. Otherwise search by label.
