@@ -89,8 +89,9 @@ def check_gmail(
 
     if not messages:
         _LOGGER.debug("No messages found for query")
-        return {"status": "no_unread"}
+        return []
 
+    results = []
     for msg_meta in messages:
         try:
             msg = (
@@ -136,7 +137,8 @@ def check_gmail(
             )
         except Exception as err:  # pragma: no cover - runtime protection
             _LOGGER.exception("OpenAI request failed: %s", err)
-            return {"status": "error", "error": str(err)}
+            results.append({"status": "error", "error": str(err)})
+            continue
 
         try:
             ai_json = json.loads(ai_response.choices[0].message.content)
@@ -145,7 +147,9 @@ def check_gmail(
                 "Malformed AI response: %s",
                 ai_response.choices[0].message.content,
             )
-            return {"status": "no_valid_response"}
+            results.append({"status": "no_valid_response"})
+            continue
+
         summary = ai_json.get("summary", "").strip()
         if len(summary) > 140:
             summary = summary[:137].rstrip() + "…"
@@ -193,10 +197,9 @@ def check_gmail(
         except Exception as err:
             _LOGGER.warning("Failed to cache output: %s", err)
 
-        return result
+        results.append(result)
 
-    _LOGGER.debug("No valid response generated")
-    return {"status": "no_valid_response"}
+    return results
 
 
 def main() -> None:
