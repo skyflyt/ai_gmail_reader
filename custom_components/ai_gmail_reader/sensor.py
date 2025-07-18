@@ -24,13 +24,15 @@ class GmailSensor(Entity):
 
     @property
     def state(self):
-        return self.coordinator.data.get("status")
+        if self.coordinator.data:
+            return len(self.coordinator.data)
+        return 0
 
     @property
     def extra_state_attributes(self):
-        data = self.coordinator.data.copy()
-        data.pop("status", None)
-        return data
+        if not self.coordinator.data:
+            return {}
+        return {"emails": self.coordinator.data}
 
     async def async_update(self):
         await self.coordinator.async_request_refresh()
