@@ -32,7 +32,7 @@ class GmailDataUpdateCoordinator(DataUpdateCoordinator):
     async def _async_update_data(self):
         """Fetch data from Gmail + OpenAI in the executor."""
         try:
-            result = await self.hass.async_add_executor_job(
+            results = await self.hass.async_add_executor_job(
                 check_gmail,
                 self._sender,
                 self._label,
@@ -44,6 +44,8 @@ class GmailDataUpdateCoordinator(DataUpdateCoordinator):
                 self._api_key,
                 self._model,
             )
-            return result
+            if not isinstance(results, list):
+                raise UpdateFailed(f"Invalid data from gmail_reader: {results}")
+            return results
         except Exception as err:
             raise UpdateFailed(f"Error fetching Gmail data: {err}")
