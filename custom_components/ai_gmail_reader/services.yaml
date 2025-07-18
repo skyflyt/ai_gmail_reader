@@ -74,4 +74,3 @@ check_gmail:
 setup_auth:
   name: Setup Auth
   description: Run OAuth flow to store Gmail token.
-
