@@ -18,7 +18,7 @@ CREDS_PATH = "/config/gmail/credentials.json"
 SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
 
 BASE_PROMPT = (
-    "You are an AI agent that extracts summary, link, and image from marketing emails. "
+    "Pleaser review this email and create a short, informal summary, most relevant link that will lead to more inormation to call to action, and most relevant image from marketing emails. "
     "Return JSON and keep 'summary' <= 140 chars."
 )
 
@@ -44,6 +44,14 @@ def find_html_part(payload):
     return None
 
 def check_gmail(sender, label, keyword, custom_prompt, importance, image_required, age_limit, api_key, model):
+    import os
+    import re
+    import base64
+    import json
+    from bs4 import BeautifulSoup
+    from google.oauth2.credentials import Credentials
+    from googleapiclient.discovery import build
+
     MAX_RESULTS = 5
     client = OpenAI(api_key=api_key)
     profile = keyword.lower().replace(" ", "_") or "default"
@@ -90,12 +98,17 @@ def check_gmail(sender, label, keyword, custom_prompt, importance, image_require
         clean_text = re.sub(r"\s+", " ", clean_text).strip()
 
         full_prompt = build_prompt(clean_text, custom_prompt)
-
         try:
             ai_response = client.chat.completions.create(
                 model=model,
                 messages=[
-                    {"role": "system", "content": "You are an email summarizer for a Gmail inbox."},
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are an email summarizer. Return only the main call‑to‑action URL "
+                            "(the first non‑image hyperlink) and a friendly summary of the email."
+                        ),
+                    },
                     {"role": "user", "content": full_prompt.strip()},
                 ],
             )
@@ -109,7 +122,6 @@ def check_gmail(sender, label, keyword, custom_prompt, importance, image_require
             raw_response = raw_response[7:]
         if raw_response.endswith("```"):
             raw_response = raw_response[:-3]
-
         try:
             ai_json = json.loads(raw_response)
         except json.JSONDecodeError:
@@ -121,27 +133,46 @@ def check_gmail(sender, label, keyword, custom_prompt, importance, image_require
             summary = summary[:137].rstrip() + "…"
 
         try:
-            service.users().messages().modify(userId="me", id=msg_meta["id"], body={"removeLabelIds": ["UNREAD"]}).execute()
+            service.users().messages().modify(
+                userId="me",
+                id=msg_meta["id"],
+                body={"removeLabelIds": ["UNREAD"]}
+            ).execute()
         except Exception as err:
             _LOGGER.warning("Failed to mark message %s read: %s", msg_meta["id"], err)
 
-        link_match = re.search(r"https?://\S+", html)
+        # Extract the true call-to-action link
+        soup = BeautifulSoup(html, "html.parser")
+        anchors = [
+            a["href"] for a in soup.find_all("a", href=True)
+            if not a.find("img")
+        ]
+        cta_link = ""
+        for href in anchors:
+            if not re.search(r"\.(?:jpg|jpeg|png|gif|bmp|svg)(?:[?#]|$)", href, re.IGNORECASE):
+                cta_link = href
+                break
+        if not cta_link and anchors:
+            cta_link = anchors[0]
+
+        # Image extraction (same as before)
         imgs = re.findall(r'<img[^>]+src=["\'](https?://[^"\']+)["\']', html)
         real_imgs = [u for u in imgs if "s0-d-e1-ft" not in u and "googleusercontent.com/" not in u]
-        image = ai_json.get("image") or (real_imgs[0] if real_imgs else None)
+        image = ai_json.get("image") or (real_imgs[0] if real_imgs else "")
 
         result = {
             "status": "ok",
             "title": subject,
             "message": summary,
             "thread_id": thread_id,
-            "link": ai_json.get("link") or (link_match.group(0) if link_match else ""),
-            "image": image or "",
+            "link": ai_json.get("link") or cta_link,
+            "image": image,
             "channel": profile,
             "importance": importance,
             "preorder": "preorder" in clean_text.lower(),
         }
 
+        # cache to disk
         try:
             os.makedirs(OUTPUT_DIR, exist_ok=True)
             sender_id = re.sub(r"[^A-Za-z0-9]+", "_", sender)
@@ -154,6 +185,7 @@ def check_gmail(sender, label, keyword, custom_prompt, importance, image_require
         results.append(result)
 
     return results
+
 
 def main() -> None:
     import argparse
