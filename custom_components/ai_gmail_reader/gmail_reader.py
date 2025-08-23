@@ -18,8 +18,12 @@ CREDS_PATH = "/config/gmail/credentials.json"
 SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
 
 BASE_PROMPT = (
-    "Pleaser review this email and create a short, informal summary, most relevant link that will lead to more inormation to call to action, and most relevant image from marketing emails. "
-    "Return JSON and keep 'summary' <= 140 chars."
+    "You are an AI summarizer for promotional emails. Always reply using a JSON object "
+    "with exactly three keys: \"summary\", \"link\", and \"image\". "
+    "\"summary\" is an informal, friendly synopsis of the offer (<= 140 characters). "
+    "\"link\" is the primary call-to-action URL in the email body (ignore image URLs, tracking pixels, unsubscribe, and 'view in browser' links). "
+    "\"image\" is the main hero image URL — the largest or most prominent marketing image (not logos, icons, social buttons, or tracking pixels). "
+    "Return only the JSON object, no code fences or extra text."
 )
 
 def build_prompt(email_text: str, custom_prompt: str) -> str:
@@ -51,6 +55,60 @@ def check_gmail(sender, label, keyword, custom_prompt, importance, image_require
     from bs4 import BeautifulSoup
     from google.oauth2.credentials import Credentials
     from googleapiclient.discovery import build
+
+    def extract_cta_link(html: str) -> str:
+        soup = BeautifulSoup(html, "html.parser")
+        anchors = soup.find_all("a", href=True)
+        for a in anchors:
+            href = a["href"]
+            text = (a.get_text() or "").lower()
+            # Skip unsubscribe/view-in-browser/mailto and image links
+            if any(k in href.lower() for k in ["unsubscribe", "view", "view-in-browser", "mailto:"]):
+                continue
+            if re.search(r"\.(?:jpg|jpeg|png|gif|bmp|svg)(?:[?#]|$)", href, re.IGNORECASE):
+                continue
+            if any(k in text for k in ["unsubscribe", "view in browser"]):
+                continue
+            cls = " ".join(a.get("class", [])).lower()
+            role = (a.get("role") or "").lower()
+            if "btn" in cls or "button" in cls or role == "button":
+                return href
+        for a in anchors:
+            href = a["href"]
+            if not re.search(r"\.(?:jpg|jpeg|png|gif|bmp|svg)(?:[?#]|$)", href, re.IGNORECASE) \
+               and "unsubscribe" not in href.lower():
+                return href
+        return ""
+
+    def extract_hero_image(html: str) -> str:
+        soup = BeautifulSoup(html, "html.parser")
+        imgs = soup.find_all("img", src=True)
+        cleaned = []
+        for img in imgs:
+            src = img["src"]
+            al = (img.get("alt") or "").lower()
+            if any(k in src.lower() for k in ["logo", "icon", "spacer", "pixel", "tracking", "googleusercontent.com/"]):
+                continue
+            if any(k in al for k in ["logo", "icon"]):
+                continue
+            cleaned.append(img)
+        for img in cleaned:
+            al = (img.get("alt") or "").lower()
+            if "hero" in al or "hero" in img["src"].lower():
+                return img["src"]
+        max_area, best = 0, ""
+        for img in cleaned:
+            try:
+                w = int(img.get("width", 0))
+                h = int(img.get("height", 0))
+                area = w * h
+                if area > max_area:
+                    max_area, best = area, img["src"]
+            except Exception:
+                pass
+        if best:
+            return best
+        return cleaned[0]["src"] if cleaned else ""
 
     MAX_RESULTS = 5
     client = OpenAI(api_key=api_key)
@@ -98,6 +156,23 @@ def check_gmail(sender, label, keyword, custom_prompt, importance, image_require
         clean_text = re.sub(r"\s+", " ", clean_text).strip()
 
         full_prompt = build_prompt(clean_text, custom_prompt)
+        tools = [{
+            "type": "function",
+            "function": {
+                "name": "extract_email_details",
+                "description": "Extract summary, CTA link, and hero image from a promotional email.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "summary": {"type": "string", "description": "<=140 character friendly synopsis"},
+                        "link": {"type": "string", "description": "primary CTA URL (non-image, not unsubscribe/view in browser)"},
+                        "image": {"type": "string", "description": "hero image URL (largest/prominent, not logo/icon/pixel)"},
+                    },
+                    "required": ["summary", "link", "image"],
+                },
+            },
+        }]
+        tool_choice = {"type": "function", "function": {"name": "extract_email_details"}}
         try:
             ai_response = client.chat.completions.create(
                 model=model,
@@ -105,28 +180,38 @@ def check_gmail(sender, label, keyword, custom_prompt, importance, image_require
                     {
                         "role": "system",
                         "content": (
-                            "You are an email summarizer. Return only the main call‑to‑action URL "
-                            "(the first non‑image hyperlink) and a friendly summary of the email."
+                            "You are an email summarizer. Follow the schema strictly and reply with only a JSON object containing summary, link, image."
                         ),
                     },
                     {"role": "user", "content": full_prompt.strip()},
                 ],
+                tools=tools,
+                tool_choice=tool_choice,
             )
         except Exception as err:
             _LOGGER.exception("OpenAI request failed: %s", err)
             results.append({"status": "error", "error": str(err)})
             continue
 
-        raw_response = ai_response.choices[0].message.content.strip()
-        if raw_response.startswith("```json"):
-            raw_response = raw_response[7:]
-        if raw_response.endswith("```"):
-            raw_response = raw_response[:-3]
-        try:
-            ai_json = json.loads(raw_response)
-        except json.JSONDecodeError:
-            _LOGGER.warning("Failed to parse AI JSON: %s", raw_response)
-            ai_json = {"summary": raw_response}
+        ai_message = ai_response.choices[0].message
+        if getattr(ai_message, "tool_calls", None):
+            try:
+                tool_args = ai_message.tool_calls[0].function.arguments
+                ai_json = json.loads(tool_args)
+            except Exception:
+                _LOGGER.warning("Failed to parse tool call JSON: %s", ai_message.tool_calls[0].function.arguments)
+                ai_json = {}
+        else:
+            raw_response = (ai_message.content or "").strip()
+            if raw_response.startswith("```json"):
+                raw_response = raw_response[7:]
+            if raw_response.endswith("```"):
+                raw_response = raw_response[:-3]
+            try:
+                ai_json = json.loads(raw_response)
+            except json.JSONDecodeError:
+                _LOGGER.warning("Failed to parse AI JSON: %s", raw_response)
+                ai_json = {"summary": raw_response}
 
         summary = ai_json.get("summary", "").strip()
         if len(summary) > 140:
@@ -141,32 +226,28 @@ def check_gmail(sender, label, keyword, custom_prompt, importance, image_require
         except Exception as err:
             _LOGGER.warning("Failed to mark message %s read: %s", msg_meta["id"], err)
 
-        # Extract the true call-to-action link
-        soup = BeautifulSoup(html, "html.parser")
-        anchors = [
-            a["href"] for a in soup.find_all("a", href=True)
-            if not a.find("img")
-        ]
-        cta_link = ""
-        for href in anchors:
-            if not re.search(r"\.(?:jpg|jpeg|png|gif|bmp|svg)(?:[?#]|$)", href, re.IGNORECASE):
-                cta_link = href
-                break
-        if not cta_link and anchors:
-            cta_link = anchors[0]
+        # Extract link and image, applying fallbacks if necessary
+        cta_link = ai_json.get("link", "").strip()
+        if not cta_link or re.search(r"\.(?:jpg|jpeg|png|gif|bmp|svg)(?:[?#]|$)", cta_link, re.IGNORECASE):
+            new_link = extract_cta_link(html)
+            if new_link and new_link != cta_link:
+                _LOGGER.debug("Overrode CTA link with fallback")
+            cta_link = new_link or ""
 
-        # Image extraction (same as before)
-        imgs = re.findall(r'<img[^>]+src=["\'](https?://[^"\']+)["\']', html)
-        real_imgs = [u for u in imgs if "s0-d-e1-ft" not in u and "googleusercontent.com/" not in u]
-        image = ai_json.get("image") or (real_imgs[0] if real_imgs else "")
+        image_url = ai_json.get("image", "").strip()
+        if not image_url or not re.search(r"\.(?:jpg|jpeg|png|gif|bmp|svg)(?:[?#]|$)", image_url, re.IGNORECASE):
+            new_image = extract_hero_image(html)
+            if new_image and new_image != image_url:
+                _LOGGER.debug("Overrode hero image with fallback")
+            image_url = new_image or ""
 
         result = {
             "status": "ok",
             "title": subject,
             "message": summary,
             "thread_id": thread_id,
-            "link": ai_json.get("link") or cta_link,
-            "image": image,
+            "link": cta_link,
+            "image": image_url,
             "channel": profile,
             "importance": importance,
             "preorder": "preorder" in clean_text.lower(),
