@@ -31,6 +31,8 @@ AI Gmail Reader is a custom Home Assistant integration that connects to your Gma
     /config/.ai_gmail_reader/token.json
     ```
 
+    The authorization flow now explicitly requests offline access, so the resulting token file includes a refresh token for long-lived access without repeating consent.
+
 5. Add the integration from **Settings → Devices & Services → Add Integration** and select **AI Gmail Reader**.
 
 > This integration installs the `openai` Python package automatically. Version 1.9.0+ is required.
