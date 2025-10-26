@@ -32,10 +32,16 @@ def build_prompt(email_text: str, custom_prompt: str) -> str:
 def setup_auth() -> str:
     os.makedirs(TOKEN_DIR, exist_ok=True)
     flow = InstalledAppFlow.from_client_secrets_file(CREDS_PATH, SCOPES)
-    creds = flow.run_local_server(port=0, open_browser=False)
+    creds = flow.run_local_server(
+        port=0,
+        open_browser=False,
+        access_type="offline",
+        prompt="consent",
+        include_granted_scopes=True,
+    )
     with open(TOKEN_PATH, "w") as token_file:
         token_file.write(creds.to_json())
-    print(f"Token stored to {TOKEN_PATH}")
+    _LOGGER.info("Token stored to %s", TOKEN_PATH)
     return TOKEN_PATH
 
 def find_html_part(payload):
