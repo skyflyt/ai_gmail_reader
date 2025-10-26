@@ -8,6 +8,8 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from openai import OpenAI
 import json
+from google.auth.transport.requests import Request
+from google.auth.exceptions import RefreshError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -119,6 +121,18 @@ def check_gmail(sender, label, keyword, custom_prompt, importance, image_require
         return {"status": "error", "error": "no_token"}
 
     creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
+    if creds and creds.expired:
+        if creds.refresh_token:
+            try:
+                creds.refresh(Request())
+            except RefreshError as err:
+                _LOGGER.error("Failed to refresh Gmail token: %s", err)
+                return {"status": "error", "error": "auth_failed"}
+            with open(TOKEN_PATH, "w") as token_file:
+                token_file.write(creds.to_json())
+        else:
+            _LOGGER.error("Gmail token expired and no refresh token available")
+            return {"status": "error", "error": "auth_failed"}
     service = build("gmail", "v1", credentials=creds)
 
     label_term = "in:inbox" if label.lower() == "inbox" else f'label:"{label}"' if " " in label else f"label:{label}"
