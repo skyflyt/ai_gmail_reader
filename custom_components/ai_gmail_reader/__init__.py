@@ -10,7 +10,12 @@ from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers.typing import ConfigType
 import voluptuous as vol
 
-from .const import DOMAIN
+from .const import (
+    DOMAIN,
+    AUTH_NOTIFICATION_ID,
+    AUTH_NOTIFICATION_MESSAGE,
+    AUTH_NOTIFICATION_TITLE,
+)
 from .gmail_reader import check_gmail, setup_auth
 from .coordinator import GmailDataUpdateCoordinator
 
@@ -57,6 +62,18 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         try:
             result = await hass.async_add_executor_job(check_gmail, *args)
             _LOGGER.info("Gmail check result: %s", result)
+
+            if (
+                isinstance(result, dict)
+                and result.get("status") == "error"
+                and result.get("error") == "auth_failed"
+            ):
+                await hass.components.persistent_notification.async_create(
+                    AUTH_NOTIFICATION_MESSAGE,
+                    title=AUTH_NOTIFICATION_TITLE,
+                    notification_id=AUTH_NOTIFICATION_ID,
+                )
+                return
 
             if resp_var := data.get("response_variable"):
                 await hass.services.async_call(
