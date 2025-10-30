@@ -58,16 +58,34 @@ check_gmail:
     model:
       name: Model
       description: OpenAI model to use.
-      default: gpt-4o-mini
+      default: gpt-5-mini
       selector:
         select:
           options:
-            - "gpt-4o-mini"
+            - "gpt-5-mini"
+            - "gpt-5"
+            - "gpt-4.1"
+            - "gpt-4.1-mini"
             - "gpt-4o"
-            - "gpt-3.5-turbo"
+            - "gpt-4o-mini"
     response_variable:
       name: Response Variable
       description: Optional input_text entity (without prefix) to store JSON results.
+      selector:
+        text:
+    notify_service:
+      name: Notify Service
+      description: Optional notify target (e.g. notify.mobile_app_phone) to push results.
+      selector:
+        text:
+    notify_title:
+      name: Notify Title Template
+      description: Optional title template using Python-style {variable} placeholders.
+      selector:
+        text:
+    notify_message:
+      name: Notify Message Template
+      description: Optional message template using Python-style {variable} placeholders.
       selector:
         text:
 
