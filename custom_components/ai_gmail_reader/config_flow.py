@@ -13,7 +13,7 @@ DATA_SCHEMA = vol.Schema(
         vol.Required(CONF_SENDER): str,
         vol.Required(CONF_LABEL, default="INBOX"): str,
         vol.Required(CONF_API_KEY): str,
-        vol.Required(CONF_MODEL, default="gpt-4o-mini"): str,
+        vol.Required(CONF_MODEL, default="gpt-5-mini"): str,
         vol.Optional(CONF_KEYWORD, default=""): cv.string,
         vol.Optional("custom_prompt", default=""): cv.string,
     }
