@@ -73,6 +73,8 @@ The `ai_gmail_reader.check_gmail` service can now notify you directly instead of
 
 This allows a single service call to fetch Gmail, summarize the email with AI, and push a notification to any supported device or channel.
 
+When using the helper, the integration enriches the notify payload so mobile app targets behave like fully interactive alerts. In addition to the summary and optional hero image, the service includes the CTA link as both `clickAction` and `url`, preserves the AI-provided `channel`, keeps important messages sticky and visible (`sticky: true`, `visibility: public`), and forwards any non-`auto` `importance` level.
+
 ## 🔁 Sensor Output Example
 
 ```yaml
