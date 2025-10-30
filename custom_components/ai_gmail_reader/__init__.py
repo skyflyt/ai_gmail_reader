@@ -21,6 +21,25 @@ from .coordinator import GmailDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
+
+class _SafeDict(dict):
+    """String format helper that leaves unknown keys untouched."""
+
+    def __missing__(self, key):  # type: ignore[override]
+        return "{" + key + "}"
+
+
+def _format_structure(value, context):
+    """Recursively format strings within a nested structure."""
+
+    if isinstance(value, str):
+        return value.format_map(context)
+    if isinstance(value, dict):
+        return {key: _format_structure(item, context) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_format_structure(item, context) for item in value]
+    return value
+
 SERVICE_CHECK_GMAIL = "check_gmail"
 SERVICE_SETUP_AUTH = "setup_auth"
 
@@ -34,8 +53,12 @@ SERVICE_CHECK_GMAIL_SCHEMA = vol.Schema(
         vol.Optional("image_required", default="false"): vol.In(["true", "false"]),
         vol.Optional("age_limit", default="1d"): str,
         vol.Required("api_key"): str,
-        vol.Optional("model", default="gpt-4o-mini"): str,
+        vol.Optional("model", default="gpt-5-mini"): str,
         vol.Optional("response_variable"): str,
+        vol.Optional("notify_service"): str,
+        vol.Optional("notify_title"): str,
+        vol.Optional("notify_message"): str,
+        vol.Optional("notify_data", default={}): dict,
     }
 )
 
@@ -85,6 +108,87 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                     },
                     blocking=False,
                 )
+
+            notify_service = data.get("notify_service")
+            if notify_service and isinstance(result, list) and result:
+                notify_title = data.get("notify_title")
+                notify_message = data.get("notify_message")
+                notify_data_template = data.get("notify_data", {})
+                sender = data["sender"]
+                label = data["label"]
+
+                domain, _, service = notify_service.partition(".")
+                if not service:
+                    domain, service = "notify", domain
+
+                context_base = {"sender": sender, "label": label}
+
+                for item in result:
+                    context = _SafeDict({**item, **context_base})
+
+                    if notify_title:
+                        title_value = notify_title.format_map(context)
+                    else:
+                        title_value = item.get("title") or f"New email from {sender}"
+
+                    if notify_message:
+                        message_value = notify_message.format_map(context)
+                    else:
+                        message_value = item.get("message", "")
+                        link = item.get("link")
+                        if link:
+                            message_value = f"{message_value}\n{link}" if message_value else link
+
+                    service_data = {"message": message_value}
+                    if title_value:
+                        service_data["title"] = title_value
+
+                    notify_data = {}
+                    if isinstance(notify_data_template, dict):
+                        notify_data = _format_structure(notify_data_template, context)
+
+                    link = item.get("link")
+                    if link:
+                        notify_data.setdefault("url", link)
+                        notify_data.setdefault("clickAction", link)
+
+                    image_url = item.get("image")
+                    if image_url:
+                        notify_data.setdefault("image", image_url)
+
+                    importance = item.get("importance")
+                    if importance:
+                        notify_data.setdefault("importance", importance)
+
+                    channel_value = item.get("channel")
+                    if channel_value:
+                        notify_data.setdefault("channel", channel_value)
+
+                    thread_id = item.get("thread_id")
+                    if thread_id:
+                        notify_data.setdefault("thread_id", thread_id)
+
+                    preorder = item.get("preorder")
+                    if preorder is not None:
+                        notify_data.setdefault("preorder", preorder)
+
+                    if notify_data:
+                        service_data["data"] = notify_data
+
+                    try:
+                        await hass.services.async_call(
+                            domain,
+                            service,
+                            service_data,
+                            blocking=False,
+                        )
+                    except Exception as notify_err:  # pragma: no cover - runtime safety
+                        _LOGGER.warning(
+                            "Failed to send notification via %s.%s: %s",
+                            domain,
+                            service,
+                            notify_err,
+                        )
         except Exception as err:  # pragma: no cover - runtime protection
             _LOGGER.exception("Unexpected error in Gmail reader: %s", err)
 

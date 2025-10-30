@@ -12,6 +12,7 @@ AI Gmail Reader is a custom Home Assistant integration that connects to your Gma
 - Outputs results to a Home Assistant sensor (`sensor.ai_gmail_<channel>`)
 - JSON attributes include: `title`, `message`, `link`, `image`, `preorder`, `importance`, `thread_id`, and `channel`
 - Built-in service `ai_gmail_reader.check_gmail` for ad-hoc or automation use
+- Optional notify helper so a single service call can fetch, summarize, and alert you
 
 ---
 
@@ -56,12 +57,46 @@ From the integration UI, you'll be asked to fill in:
 - **Gmail Label** (e.g., `INBOX` or any custom label)
 - **Keyword** (e.g., `preorder`, `pokemon`, etc.)
 - **OpenAI API key**
-- **Model** (e.g., `gpt-4o`, `gpt-4o-mini`, etc.)
+- **Model** (e.g., `gpt-5-mini`, `gpt-5`, `gpt-4o`, etc.)
 - **Custom prompt** (optional — guides the summary behavior)
 
 A new sensor will be created with attributes reflecting the latest AI-parsed email that matches your query.
 
 ---
+
+## 🔔 Built-in notification helper
+
+The `ai_gmail_reader.check_gmail` service can now notify you directly instead of only returning JSON. Provide the `notify_service` field with a Home Assistant notify target (for example `notify.mobile_app_pixel_8`). You can optionally customize the notification content:
+
+- `notify_title` — optional template that uses Python-style `{variable}` placeholders. Available placeholders include everything in the AI result (`title`, `message`, `link`, `image`, `importance`, `channel`, `thread_id`, `preorder`) plus `sender` and `label`.
+- `notify_message` — optional message body template using the same placeholders. If omitted, the service sends the AI summary and link.
+- `notify_data` — optional nested dictionary for additional notify payload fields (e.g., `sticky`, `url`, `channel`). Strings are templated with the same `{variable}` placeholders, while booleans/numbers remain unchanged.
+
+The integration automatically fills in common metadata from the AI response (link, image, channel, importance, preorder flag, thread ID) unless you override them in `notify_data`. This allows a single service call to fetch Gmail, summarize the email with AI, and push a notification to any supported device or channel.
+
+### Example mobile app notification
+
+```yaml
+service: ai_gmail_reader.check_gmail
+data:
+  sender: pokemon@email.pokemon.com
+  label: INBOX
+  api_key: !secret openai_key
+  model: gpt-5-mini
+  notify_service: notify.mobile_app_pixel_10_pro_fold
+  notify_title: "{title}"
+  notify_message: "{message}"
+  notify_data:
+    image: "{image}"
+    clickAction: "{link}"
+    url: "{link}"
+    sticky: true
+    channel: "{channel}"
+    importance: "{importance}"
+    visibility: public
+```
+
+This mirrors a common Home Assistant automation pattern so that tapping the notification opens the summarized email directly.
 
 ## 🔁 Sensor Output Example
 
