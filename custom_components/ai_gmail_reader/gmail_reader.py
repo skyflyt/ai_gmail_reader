@@ -65,58 +65,155 @@ def check_gmail(sender, label, keyword, custom_prompt, importance, image_require
     from googleapiclient.discovery import build
 
     def extract_cta_link(html: str) -> str:
+        def score_anchor(anchor) -> float:
+            href = anchor.get("href", "")
+            if not href or href.startswith("mailto:"):
+                return -1
+            href_lower = href.lower()
+            if any(bad in href_lower for bad in ["unsubscribe", "view", "view-in-browser", "preferences", "privacy"]):
+                return -1
+            if not href_lower.startswith("http"):
+                return -1
+            if re.search(r"\.(?:jpg|jpeg|png|gif|bmp|svg)(?:[?#]|$)", href_lower):
+                return -1
+
+            text = (anchor.get_text(strip=True) or "").lower()
+            if any(bad in text for bad in ["unsubscribe", "view in browser", "privacy"]):
+                return -1
+
+            score = 0.0
+            cls = " ".join(anchor.get("class", [])).lower()
+            role = (anchor.get("role") or "").lower()
+            data_cta = " ".join([str(v) for k, v in anchor.attrs.items() if "cta" in k.lower()])
+            if any(token in cls for token in ["btn", "button", "cta", "primary", "action"]):
+                score += 4
+            if role == "button":
+                score += 3
+            if "background" in (anchor.get("style") or "").lower():
+                score += 1.5
+            if "font-size" in (anchor.get("style") or "").lower():
+                score += 0.5
+            if data_cta:
+                score += 2
+
+            action_words = [
+                "shop", "buy", "get", "learn", "book", "explore", "save",
+                "start", "join", "order", "register", "claim", "subscribe",
+                "upgrade", "download", "watch", "apply"
+            ]
+            if any(word in text for word in action_words):
+                score += 3
+            if text.isupper() and len(text) <= 30 and len(text) >= 3:
+                score += 1
+            if len(text) >= 12:
+                score += 0.5
+
+            # If the anchor wraps an image, consider it a CTA but lower priority than text buttons
+            if anchor.find("img"):
+                score += 1
+            return score
+
         soup = BeautifulSoup(html, "html.parser")
         anchors = soup.find_all("a", href=True)
-        for a in anchors:
-            href = a["href"]
-            text = (a.get_text() or "").lower()
-            # Skip unsubscribe/view-in-browser/mailto and image links
-            if any(k in href.lower() for k in ["unsubscribe", "view", "view-in-browser", "mailto:"]):
+        best_href, best_score = "", 0
+        for anchor in anchors:
+            score = score_anchor(anchor)
+            if score > best_score:
+                best_score = score
+                best_href = anchor.get("href", "")
+
+        if best_href:
+            return best_href
+
+        for anchor in anchors:
+            href = anchor.get("href", "")
+            if not href:
                 continue
-            if re.search(r"\.(?:jpg|jpeg|png|gif|bmp|svg)(?:[?#]|$)", href, re.IGNORECASE):
+            href_lower = href.lower()
+            if not href_lower.startswith("http"):
                 continue
-            if any(k in text for k in ["unsubscribe", "view in browser"]):
+            if "unsubscribe" in href_lower:
                 continue
-            cls = " ".join(a.get("class", [])).lower()
-            role = (a.get("role") or "").lower()
-            if "btn" in cls or "button" in cls or role == "button":
-                return href
-        for a in anchors:
-            href = a["href"]
-            if not re.search(r"\.(?:jpg|jpeg|png|gif|bmp|svg)(?:[?#]|$)", href, re.IGNORECASE) \
-               and "unsubscribe" not in href.lower():
-                return href
+            if re.search(r"\.(?:jpg|jpeg|png|gif|bmp|svg)(?:[?#]|$)", href_lower):
+                continue
+            return href
         return ""
 
     def extract_hero_image(html: str) -> str:
+        def parse_dimension(value) -> int:
+            if not value:
+                return 0
+            if isinstance(value, (int, float)):
+                return int(value)
+            match = re.search(r"(\d+)(?:\.\d+)?", str(value))
+            return int(match.group(1)) if match else 0
+
+        def score_image(img) -> float:
+            src = img.get("src", "")
+            if not src:
+                return -1
+            src_lower = src.lower()
+            if src_lower.startswith("data:"):
+                return -1
+            if not src_lower.startswith("http") and "//" not in src_lower:
+                return -1
+            if any(token in src_lower for token in ["logo", "icon", "spacer", "pixel", "tracking", "badge", "social"]):
+                return -1
+
+            alt = (img.get("alt") or "").lower()
+            if any(token in alt for token in ["logo", "icon", "twitter", "facebook", "instagram"]):
+                return -1
+
+            width = parse_dimension(img.get("width"))
+            height = parse_dimension(img.get("height"))
+            style = img.get("style") or ""
+            style_width = parse_dimension(re.search(r"width\s*:\s*([0-9.]+)", style))
+            style_height = parse_dimension(re.search(r"height\s*:\s*([0-9.]+)", style))
+            width = max(width, style_width)
+            height = max(height, style_height)
+            if width == 0 and height == 0:
+                width = parse_dimension(img.get("data-width"))
+                height = parse_dimension(img.get("data-height"))
+
+            if width and not height:
+                height = width
+            if height and not width:
+                width = height
+
+            area = width * height
+            score = float(area)
+            if "hero" in alt or "hero" in src_lower or "banner" in alt or "banner" in src_lower:
+                score += 500000
+            if width >= 300:
+                score += 50000
+            if img.find_parent("a"):
+                score += 1000
+            return score
+
         soup = BeautifulSoup(html, "html.parser")
         imgs = soup.find_all("img", src=True)
-        cleaned = []
+        best_img, best_score = None, 0
         for img in imgs:
-            src = img["src"]
-            al = (img.get("alt") or "").lower()
-            if any(k in src.lower() for k in ["logo", "icon", "spacer", "pixel", "tracking", "googleusercontent.com/"]):
+            score = score_image(img)
+            if score > best_score:
+                best_img, best_score = img, score
+
+        if best_img:
+            return best_img.get("src", "")
+
+        for img in imgs:
+            src = img.get("src", "")
+            if not src:
                 continue
-            if any(k in al for k in ["logo", "icon"]):
+            src_lower = src.lower()
+            if any(token in src_lower for token in ["logo", "icon", "spacer", "pixel", "tracking"]):
                 continue
-            cleaned.append(img)
-        for img in cleaned:
-            al = (img.get("alt") or "").lower()
-            if "hero" in al or "hero" in img["src"].lower():
-                return img["src"]
-        max_area, best = 0, ""
-        for img in cleaned:
-            try:
-                w = int(img.get("width", 0))
-                h = int(img.get("height", 0))
-                area = w * h
-                if area > max_area:
-                    max_area, best = area, img["src"]
-            except Exception:
-                pass
-        if best:
-            return best
-        return cleaned[0]["src"] if cleaned else ""
+            if src_lower.startswith("data:"):
+                continue
+            if not src_lower.startswith("http") and "//" not in src_lower:
+                continue
+            return src
+        return ""
 
     MAX_RESULTS = 5
     client = OpenAI(api_key=api_key)
