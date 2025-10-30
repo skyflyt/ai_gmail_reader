@@ -64,10 +64,11 @@ check_gmail:
           options:
             - "gpt-5-mini"
             - "gpt-5"
-            - "gpt-4.1"
-            - "gpt-4.1-mini"
             - "gpt-4o"
             - "gpt-4o-mini"
+            - "o4-mini"
+            - "gpt-4.1"
+            - "gpt-4.1-mini"
     response_variable:
       name: Response Variable
       description: Optional input_text entity (without prefix) to store JSON results.
@@ -75,22 +76,22 @@ check_gmail:
         text:
     notify_service:
       name: Notify Service
-      description: Optional notify target (e.g. notify.mobile_app_phone) to push results.
+      description: Optional notify target (e.g., notify.mobile_app_pixel_8) to send alerts.
       selector:
         text:
     notify_title:
-      name: Notify Title Template
-      description: Optional title template using Python-style {variable} placeholders.
+      name: Notify Title
+      description: Optional title template using {placeholders} from the email result.
       selector:
         text:
     notify_message:
-      name: Notify Message Template
-      description: Optional message template using Python-style {variable} placeholders.
+      name: Notify Message
+      description: Optional message template using {placeholders} from the email result.
       selector:
         text:
     notify_data:
-      name: Notify Data Template
-      description: Optional dictionary of additional notify payload fields. Strings support {variable} placeholders.
+      name: Notify Data
+      description: Optional JSON object with extra notify payload values (supports nested templates).
       selector:
         object:
 

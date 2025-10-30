@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Mapping
+from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
@@ -29,7 +31,7 @@ class _SafeDict(dict):
         return "{" + key + "}"
 
 
-def _format_structure(value, context):
+def _format_structure(value: Any, context: Mapping[str, Any]) -> Any:
     """Recursively format strings within a nested structure."""
 
     if isinstance(value, str):
@@ -58,7 +60,7 @@ SERVICE_CHECK_GMAIL_SCHEMA = vol.Schema(
         vol.Optional("notify_service"): str,
         vol.Optional("notify_title"): str,
         vol.Optional("notify_message"): str,
-        vol.Optional("notify_data", default={}): dict,
+        vol.Optional("notify_data", default=None): dict,
     }
 )
 
@@ -113,7 +115,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             if notify_service and isinstance(result, list) and result:
                 notify_title = data.get("notify_title")
                 notify_message = data.get("notify_message")
-                notify_data_template = data.get("notify_data", {})
+                notify_data_template = data.get("notify_data") or {}
                 sender = data["sender"]
                 label = data["label"]
 
@@ -121,9 +123,14 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                 if not service:
                     domain, service = "notify", domain
 
-                context_base = {"sender": sender, "label": label}
+                context_base: dict[str, Any] = {"sender": sender, "label": label}
 
                 for item in result:
+                    if not isinstance(item, dict):
+                        continue
+
+                    if item.get("status") and item.get("status") != "ok":
+                        continue
                     context = _SafeDict({**item, **context_base})
 
                     if notify_title:
@@ -137,15 +144,22 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                         message_value = item.get("message", "")
                         link = item.get("link")
                         if link:
-                            message_value = f"{message_value}\n{link}" if message_value else link
+                            message_value = (
+                                f"{message_value}\n{link}" if message_value else link
+                            )
 
-                    service_data = {"message": message_value}
+                    service_data: dict[str, Any] = {"message": message_value}
                     if title_value:
                         service_data["title"] = title_value
 
-                    notify_data = {}
+                    notify_data: dict[str, Any] = {}
                     if isinstance(notify_data_template, dict):
                         notify_data = _format_structure(notify_data_template, context)
+                    else:
+                        _LOGGER.debug(
+                            "notify_data ignored because it is not a mapping: %s",
+                            notify_data_template,
+                        )
 
                     link = item.get("link")
                     if link:
