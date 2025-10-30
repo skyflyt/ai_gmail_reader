@@ -133,9 +133,24 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                     image_url = item.get("image")
                     if image_url:
                         notify_data["image"] = image_url
+
+                    link = item.get("link")
+                    if link:
+                        notify_data["clickAction"] = link
+                        notify_data["url"] = link
+
+                    channel = item.get("channel")
+                    if channel:
+                        notify_data["channel"] = channel
+
                     importance = item.get("importance")
                     if importance and importance != "auto":
                         notify_data["importance"] = importance
+
+                    # Keep notifications persistent and visible on the lock screen so they
+                    # mirror the recommended mobile app action behaviour.
+                    notify_data.setdefault("sticky", True)
+                    notify_data.setdefault("visibility", "public")
                     if notify_data:
                         service_data["data"] = notify_data
 
